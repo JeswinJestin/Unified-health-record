@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
-import BottomNavigation from '../../components/BottomNavigation';
+// import BottomNavigation from '../../components/BottomNavigation';
 
 const MEDI_COLORS = {
   PRIMARY: {
@@ -24,7 +24,7 @@ export default function NotificationsScreen() {
       
       {/* Add your notifications content here */}
       
-      <BottomNavigation />
+      {/* <BottomNavigation /> */}
     </SafeAreaView>
   );
 }

@@ -1,38 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db } from '@/app/firebase/config'; // Make sure you have this firebase config file
 
 export default function SignupScreen() {
   const router = useRouter();
-  const [step, setStep] = useState(1); // Step 1: Personal Details, Step 2: OTP Verification, Step 3: PIN Creation
   const [formData, setFormData] = useState({
     fullName: '',
-    dateOfBirth: '',
-    uniqueId: '',
-    mobileNumber: '',
-    pin: '',
-    confirmPin: '',
-    otp: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
   });
 
-  const handleSendOTP = () => {
-    // TODO: Implement actual OTP sending logic
-    Alert.alert('OTP Sent', 'A verification code has been sent to your mobile number.');
-    setStep(2);
-  };
-
-  const handleVerifyOTP = () => {
-    // TODO: Add OTP verification logic
-    if (formData.otp.length === 6) {
-      Alert.alert('OTP Verified', 'Proceed to create your PIN.');
-      setStep(3);
-    } else {
-      Alert.alert('Error', 'Invalid OTP. Please try again.');
+  const handleSignup = async () => {
+    if (formData.password !== formData.confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
     }
-  };
 
-  const handleSignup = () => {
-    if (formData.pin === formData.confirmPin && formData.pin.length === 6) {
+    try {
+      // Create the user account
+      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+      
+      // Create user document in Firestore
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
+        fullName: formData.fullName,
+        email: formData.email,
+        createdAt: new Date(),
+      });
+
       Alert.alert(
         'Success',
         'Account created successfully!',
@@ -43,109 +41,10 @@ export default function SignupScreen() {
           }
         ]
       );
-    } else {
-      Alert.alert('Error', 'PINs do not match or are invalid. Try again.');
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
     }
   };
-
-  const renderStep1 = () => (
-    <>
-      <TextInput
-        style={styles.input}
-        placeholder="Full Name (as per govt documents)"
-        placeholderTextColor="#ADADAD"
-        value={formData.fullName}
-        onChangeText={(text) => setFormData({ ...formData, fullName: text })}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Date of Birth (DD/MM/YYYY)"
-        placeholderTextColor="#ADADAD"
-        value={formData.dateOfBirth}
-        onChangeText={(text) => setFormData({ ...formData, dateOfBirth: text })}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Unique ID"
-        placeholderTextColor="#ADADAD"
-        value={formData.uniqueId}
-        onChangeText={(text) => setFormData({ ...formData, uniqueId: text })}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Mobile Number"
-        placeholderTextColor="#ADADAD"
-        keyboardType="numeric"
-        maxLength={10}
-        value={formData.mobileNumber}
-        onChangeText={(text) => setFormData({ ...formData, mobileNumber: text })}
-      />
-      <TouchableOpacity style={styles.button} onPress={handleSendOTP}>
-        <Text style={styles.buttonText}>Send OTP</Text>
-      </TouchableOpacity>
-    </>
-  );
-
-  const renderStep2 = () => (
-    <>
-      <TextInput
-        style={styles.input}
-        placeholder="Enter OTP"
-        placeholderTextColor="#ADADAD"
-        keyboardType="numeric"
-        maxLength={6}
-        value={formData.otp}
-        onChangeText={(text) => setFormData({ ...formData, otp: text })}
-      />
-      <TouchableOpacity style={styles.button} onPress={handleVerifyOTP}>
-        <Text style={styles.buttonText}>Verify OTP</Text>
-      </TouchableOpacity>
-    </>
-  );
-
-  const renderStep3 = () => (
-    <>
-      <TextInput
-        style={styles.input}
-        placeholder="Create 6-Digit PIN"
-        placeholderTextColor="#ADADAD"
-        secureTextEntry
-        keyboardType="numeric"
-        maxLength={6}
-        value={formData.pin}
-        onChangeText={(text) => setFormData({ ...formData, pin: text })}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Confirm 6-Digit PIN"
-        placeholderTextColor="#ADADAD"
-        secureTextEntry
-        keyboardType="numeric"
-        maxLength={6}
-        value={formData.confirmPin}
-        onChangeText={(text) => setFormData({ ...formData, confirmPin: text })}
-      />
-      <TouchableOpacity style={styles.button} onPress={handleSignup}>
-        <Text style={styles.buttonText}>Create Account</Text>
-      </TouchableOpacity>
-    </>
-  );
-
-  useEffect(() => {
-    return () => {
-      // Cleanup function
-      setFormData({
-        fullName: '',
-        dateOfBirth: '',
-        uniqueId: '',
-        mobileNumber: '',
-        pin: '',
-        confirmPin: '',
-        otp: '',
-      });
-      setStep(1);
-    };
-  }, []);
 
   return (
     <ScrollView style={styles.container}>
@@ -162,17 +61,49 @@ export default function SignupScreen() {
 
       <View style={styles.headerContainer}>
         <Text style={styles.headerText}>
-          {step === 1 ? 'Create Account' : step === 2 ? 'Verify OTP' : 'Set Up PIN'}
+          Create Account
         </Text>
         <Text style={styles.subHeaderText}>
-          {step === 1 ? 'Enter your details' : step === 2 ? 'Verify your mobile number' : 'Create a secure PIN'}
+          Enter your details
         </Text>
       </View>
 
       <View style={styles.formContainer}>
-        {step === 1 && renderStep1()}
-        {step === 2 && renderStep2()}
-        {step === 3 && renderStep3()}
+        <TextInput
+          style={styles.input}
+          placeholder="Full Name"
+          placeholderTextColor="#ADADAD"
+          value={formData.fullName}
+          onChangeText={(text) => setFormData({ ...formData, fullName: text })}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          placeholderTextColor="#ADADAD"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={formData.email}
+          onChangeText={(text) => setFormData({ ...formData, email: text })}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          placeholderTextColor="#ADADAD"
+          secureTextEntry
+          value={formData.password}
+          onChangeText={(text) => setFormData({ ...formData, password: text })}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Confirm Password"
+          placeholderTextColor="#ADADAD"
+          secureTextEntry
+          value={formData.confirmPassword}
+          onChangeText={(text) => setFormData({ ...formData, confirmPassword: text })}
+        />
+        <TouchableOpacity style={styles.button} onPress={handleSignup}>
+          <Text style={styles.buttonText}>Create Account</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.loginContainer}>

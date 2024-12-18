@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Image, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '@/app/firebase/config';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/app/firebase/config';
 
 const MEDI_COLORS = {
   PRIMARY: {
@@ -23,7 +27,7 @@ const MEDI_COLORS = {
 
 export default function HomeScreen() {
   const [greeting, setGreeting] = useState('');
-  const [userName, setUserName] = useState('John Doe');
+  const [userName, setUserName] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -36,11 +40,36 @@ export default function HomeScreen() {
       setGreeting('Good Evening');
     }
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        router.replace('/login');
+      } else {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const firstName = userData.fullName?.split(' ')[0] || 'User';
+            setUserName(firstName);
+          } else {
+            setUserName('User');
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          setUserName('User');
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const handlePress = (destination: string) => {
     if (destination === 'records') {
       router.replace('/(tabs)/records');
     } else {
-      router.push(`/(tabs)/${destination}`);
+      router.push(`/(tabs)/${destination}` as any);
     }
   };
 

@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '@/app/firebase/config';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const [aadhar, setAadhar] = useState('');
-  const [pin, setPin] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
-  const handleLogin = () => {
-    if (pin.length === 6 && aadhar.length === 12) {
+  const handleLogin = async () => {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       router.replace('/(tabs)/home');
-    } else {
-      Alert.alert('Error', 'Please enter valid credentials');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to login');
     }
   };
 
@@ -36,22 +39,20 @@ export default function LoginScreen() {
       <View style={styles.formContainer}>
         <TextInput
           style={styles.input}
-          placeholder="Aadhar Number"
+          placeholder="Email"
           placeholderTextColor="#ADADAD"
-          keyboardType="numeric"
-          maxLength={12}
-          value={aadhar}
-          onChangeText={setAadhar}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={email}
+          onChangeText={setEmail}
         />
         <TextInput
           style={styles.input}
-          placeholder="6-Digit PIN"
+          placeholder="Password"
           placeholderTextColor="#ADADAD"
           secureTextEntry
-          keyboardType="numeric"
-          maxLength={6}
-          value={pin}
-          onChangeText={setPin}
+          value={password}
+          onChangeText={setPassword}
         />
         
         <TouchableOpacity style={styles.forgotPassword}>

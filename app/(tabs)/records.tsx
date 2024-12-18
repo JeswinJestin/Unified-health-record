@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import BottomNavigation from '../../components/BottomNavigation';
+// import BottomNavigation from '../../components/BottomNavigation';
 
 const MEDI_COLORS = {
   PRIMARY: {
@@ -177,7 +177,7 @@ export default function RecordsScreen() {
           .map(record => renderRecordCard(record))}
       </ScrollView>
 
-      <BottomNavigation />
+      {/* <BottomNavigation /> */}
     </SafeAreaView>
   );
 }
