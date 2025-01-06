@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Modal, TextInput, Alert } from 'react-native';
 import { getAuth, signOut } from 'firebase/auth';
 import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { router } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import * as ImagePicker from 'expo-image-picker';
 
 const ProfileScreen = () => {
   const [userData, setUserData] = useState({
@@ -10,12 +13,23 @@ const ProfileScreen = () => {
     email: '',
     phone: '',
     address: '',
+    profileImage: '',
   });
   const [isEditing, setIsEditing] = useState(false);
   const [editedData, setEditedData] = useState({...userData});
+  const [isImagePickerVisible, setIsImagePickerVisible] = useState(false);
 
   useEffect(() => {
     fetchUserData();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Sorry, we need camera roll permissions to make this work!');
+      }
+    })();
   }, []);
 
   const fetchUserData = async () => {
@@ -25,12 +39,54 @@ const ProfileScreen = () => {
       const userDoc = await getDoc(doc(db, 'users', auth.currentUser?.uid || ''));
       
       if (userDoc.exists()) {
-        const data = userDoc.data() as { fullName: string; email: string; phone: string; address: string };
-        setUserData(data);
-        setEditedData(data);
+        const data = userDoc.data();
+        setUserData({
+          fullName: data.fullName || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          address: data.address || '',
+          profileImage: data.profileImage || '',
+        });
+        setEditedData({
+          fullName: data.fullName || '',
+          email: data.email || '', 
+          phone: data.phone || '',
+          address: data.address || '',
+          profileImage: data.profileImage || '',
+        });
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
+    }
+  };
+
+  const pickImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 1,
+      });
+
+      if (!result.canceled) {
+        const storage = getStorage();
+        const auth = getAuth();
+        const imageRef = ref(storage, `profileImages/${auth.currentUser?.uid}`);
+        
+        const response = await fetch(result.assets[0].uri);
+        const blob = await response.blob();
+        
+        await uploadBytes(imageRef, blob);
+        const downloadURL = await getDownloadURL(imageRef);
+        
+        setEditedData(prev => ({
+          ...prev,
+          profileImage: downloadURL
+        }));
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to upload image');
     }
   };
 
@@ -67,41 +123,61 @@ const ProfileScreen = () => {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      {/* Profile Picture Section */}
-      <View style={styles.profilePicContainer}>
-        <Image
-          source={{ uri: 'https://via.placeholder.com/100' }} // Replace with actual image URL
-          style={styles.profilePic}
-        />
+    <ScrollView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.profilePicContainer}
+          onPress={() => setIsImagePickerVisible(true)}
+        >
+          <Image
+            source={
+              userData.profileImage 
+                ? { uri: userData.profileImage }
+                : require('../../assets/images/default-avatar.png')
+            }
+            style={styles.profilePic}
+          />
+          <View style={styles.editIconContainer}>
+            <MaterialIcons name="edit" size={20} color="#FFF" />
+          </View>
+        </TouchableOpacity>
+        <Text style={styles.userName}>{userData.fullName}</Text>
+        <Text style={styles.userEmail}>{userData.email}</Text>
       </View>
 
-      {/* User Information Section */}
-      <View style={styles.infoContainer}>
-        <Text style={styles.label}>Name:</Text>
-        <Text style={styles.value}>{userData.fullName}</Text>
+      <View style={styles.infoCard}>
+        <View style={styles.infoRow}>
+          <MaterialIcons name="phone" size={24} color="#0D6C7E" />
+          <View style={styles.infoTextContainer}>
+            <Text style={styles.infoLabel}>Phone</Text>
+            <Text style={styles.infoValue}>{userData.phone}</Text>
+          </View>
+        </View>
 
-        <Text style={styles.label}>Email:</Text>
-        <Text style={styles.value}>{userData.email}</Text>
-
-        <Text style={styles.label}>Phone:</Text>
-        <Text style={styles.value}>{userData.phone}</Text>
-
-        <Text style={styles.label}>Address:</Text>
-        <Text style={styles.value}>{userData.address}</Text>
+        <View style={styles.infoRow}>
+          <MaterialIcons name="location-on" size={24} color="#0D6C7E" />
+          <View style={styles.infoTextContainer}>
+            <Text style={styles.infoLabel}>Address</Text>
+            <Text style={styles.infoValue}>{userData.address}</Text>
+          </View>
+        </View>
       </View>
 
-      {/* Action Buttons Section */}
       <View style={styles.actionsContainer}>
-        <TouchableOpacity style={styles.button} onPress={() => setIsEditing(true)}>
-          <Text style={styles.buttonText}>Edit Profile</Text>
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => setIsEditing(true)}
+        >
+          <MaterialIcons name="edit" size={24} color="#FFF" />
+          <Text style={styles.actionButtonText}>Edit Profile</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={[styles.button, styles.logoutButton]}
+          style={[styles.actionButton, styles.logoutButton]}
           onPress={handleSignOut}
         >
-          <Text style={[styles.buttonText, styles.logoutText]}>Logout</Text>
+          <MaterialIcons name="logout" size={24} color="#FFF" />
+          <Text style={styles.actionButtonText}>Logout</Text>
         </TouchableOpacity>
       </View>
 
@@ -109,6 +185,23 @@ const ProfileScreen = () => {
       <Modal visible={isEditing} animationType="slide" transparent>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
+            <TouchableOpacity 
+              style={styles.modalProfilePic}
+              onPress={pickImage}
+            >
+              <Image
+                source={
+                  editedData.profileImage 
+                    ? { uri: editedData.profileImage }
+                    : require('../../assets/images/default-avatar.png')
+                }
+                style={styles.modalProfileImage}
+              />
+              <View style={styles.modalEditIcon}>
+                <MaterialIcons name="camera-alt" size={20} color="#FFF" />
+              </View>
+            </TouchableOpacity>
+
             <Text style={styles.modalTitle}>Edit Profile</Text>
             
             <TextInput
@@ -140,13 +233,13 @@ const ProfileScreen = () => {
                 style={[styles.modalButton, styles.cancelButton]} 
                 onPress={() => setIsEditing(false)}
               >
-                <Text style={styles.buttonText}>Cancel</Text>
+                <Text style={styles.modalButton}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.modalButton} 
                 onPress={handleUpdateProfile}
               >
-                <Text style={styles.buttonText}>Save</Text>
+                <Text style={styles.modalButton}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -159,65 +252,96 @@ const ProfileScreen = () => {
 // Styles
 const styles = StyleSheet.create({
   container: {
-    flexGrow: 1,
-    padding: 20,
+    flex: 1,
     backgroundColor: '#F4F4F4',
   },
-  profilePicContainer: {
+  header: {
+    backgroundColor: '#0D6C7E',
+    padding: 20,
     alignItems: 'center',
-    marginVertical: 20,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+  },
+  profilePicContainer: {
+    position: 'relative',
+    marginBottom: 15,
   },
   profilePic: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: '#FFF',
+  },
+  editIconContainer: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#F4A261',
+    padding: 8,
+    borderRadius: 20,
     borderWidth: 2,
-    borderColor: '#0D6C7E',
+    borderColor: '#FFF',
   },
-  infoContainer: {
-    marginVertical: 20,
-    padding: 20,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  label: {
-    fontSize: 16,
+  userName: {
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#08505D',
+    color: '#FFF',
     marginBottom: 5,
   },
-  value: {
+  userEmail: {
+    fontSize: 16,
+    color: '#E0E0E0',
+  },
+  infoCard: {
+    margin: 20,
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 20,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  infoTextContainer: {
+    marginLeft: 15,
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  infoValue: {
     fontSize: 16,
     color: '#333',
-    marginBottom: 15,
+    marginTop: 2,
   },
   actionsContainer: {
-    marginTop: 20,
-    alignItems: 'center',
+    padding: 20,
   },
-  button: {
-    width: '80%',
-    padding: 15,
-    backgroundColor: '#0D6C7E',
-    borderRadius: 10,
+  actionButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0D6C7E',
+    padding: 15,
+    borderRadius: 12,
     marginBottom: 15,
   },
-  buttonText: {
+  actionButtonText: {
+    color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#fff',
+    marginLeft: 10,
   },
   logoutButton: {
     backgroundColor: '#D62828',
-  },
-  logoutText: {
-    color: '#F4F4F4',
   },
   modalContainer: {
     flex: 1,
@@ -272,6 +396,27 @@ const styles = StyleSheet.create({
   invalidInput: {
     borderColor: '#D62828',
     borderWidth: 2,
+  },
+  modalProfilePic: {
+    position: 'relative',
+    marginBottom: 15,
+  },
+  modalProfileImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: '#FFF',
+  },
+  modalEditIcon: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#F4A261',
+    padding: 8,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#FFF',
   },
 });
 

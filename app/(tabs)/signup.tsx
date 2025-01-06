@@ -4,6 +4,20 @@ import { useRouter } from 'expo-router';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '@/app/firebase/config'; // Make sure you have this firebase config file
+import { SendDirectSms } from 'react-native-send-direct-sms';
+
+const sendSmsData = (mobileNumber: string, bodySMS: string) => {
+  console.log('Attempting to send SMS to:', mobileNumber);
+  console.log('SMS content:', bodySMS);
+  
+  SendDirectSms(mobileNumber, bodySMS)
+    .then((res) => {
+      console.log('SMS sent successfully:', res);
+    })
+    .catch((err) => {
+      console.error('SMS sending failed:', err);
+    });
+};
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -12,9 +26,66 @@ export default function SignupScreen() {
     email: '',
     password: '',
     confirmPassword: '',
+    mobileNumber: '',
   });
+  const [otpSent, setOtpSent] = useState(false);
+  const [isLoadingOtp, setIsLoadingOtp] = useState(false);
+
+  const generateOTP = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  };
+
+  const handleSendOTP = async () => {
+    console.log('Starting OTP send process...');
+    console.log('Mobile number:', formData.mobileNumber);
+
+    if (!formData.mobileNumber || formData.mobileNumber.length !== 10) {
+      console.log('Invalid mobile number length:', formData.mobileNumber.length);
+      Alert.alert('Error', 'Please enter a valid 10-digit mobile number');
+      return;
+    }
+
+    setIsLoadingOtp(true);
+    try {
+      const otp = generateOTP();
+      console.log('Generated OTP:', otp);
+      
+      const otpMessage = `Your MediConnect OTP is: ${otp}. Valid for 10 minutes.`;
+      console.log('OTP message:', otpMessage);
+      
+      // Store OTP in Firestore
+      console.log('Storing OTP in Firestore...');
+      await setDoc(doc(db, 'otpVerifications', formData.mobileNumber), {
+        otp,
+        expiry: new Date(Date.now() + 10 * 60000), // 10 minutes from now
+        attempts: 0,
+        verified: false,
+        createdAt: new Date(),
+      });
+      console.log('OTP stored in Firestore successfully');
+
+      // Send OTP via SMS
+      console.log('Initiating SMS send...');
+      sendSmsData(formData.mobileNumber, otpMessage);
+      
+      setOtpSent(true);
+      console.log('OTP process completed successfully');
+      Alert.alert('Success', 'OTP has been sent to your mobile number');
+    } catch (error: any) {
+      console.error('OTP process failed:', error);
+      Alert.alert('Error', 'Failed to send OTP. Please try again.');
+    } finally {
+      setIsLoadingOtp(false);
+      console.log('OTP process finished');
+    }
+  };
 
   const handleSignup = async () => {
+    if (!otpSent) {
+      Alert.alert('Error', 'Please verify your mobile number first');
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       Alert.alert('Error', 'Passwords do not match');
       return;
@@ -28,19 +99,18 @@ export default function SignupScreen() {
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         fullName: formData.fullName,
         email: formData.email,
+        mobileNumber: formData.mobileNumber,
         createdAt: new Date(),
       });
 
-      Alert.alert(
-        'Success',
-        'Account created successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/(tabs)/home')
-          }
-        ]
-      );
+      // Navigate to OTP verification page with mobile number
+      router.push({
+        pathname: '/auth/verify-otp',
+        params: { 
+          mobileNumber: formData.mobileNumber,
+          userId: userCredential.user.uid
+        }
+      });
     } catch (error: any) {
       Alert.alert('Error', error.message);
     }
@@ -101,7 +171,32 @@ export default function SignupScreen() {
           value={formData.confirmPassword}
           onChangeText={(text) => setFormData({ ...formData, confirmPassword: text })}
         />
-        <TouchableOpacity style={styles.button} onPress={handleSignup}>
+        <View style={styles.phoneContainer}>
+          <TextInput
+            style={[styles.input, styles.phoneInput]}
+            placeholder="Mobile Number"
+            placeholderTextColor="#ADADAD"
+            keyboardType="numeric"
+            maxLength={10}
+            value={formData.mobileNumber}
+            onChangeText={(text) => setFormData({ ...formData, mobileNumber: text })}
+          />
+          <TouchableOpacity 
+            style={[styles.otpButton, isLoadingOtp && styles.otpButtonDisabled]}
+            onPress={handleSendOTP}
+            disabled={isLoadingOtp}
+          >
+            <Text style={styles.otpButtonText}>
+              {isLoadingOtp ? 'Sending...' : otpSent ? 'Resend OTP' : 'Send OTP'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity 
+          style={[styles.button, !otpSent && styles.buttonDisabled]} 
+          onPress={handleSignup}
+          disabled={!otpSent}
+        >
           <Text style={styles.buttonText}>Create Account</Text>
         </TouchableOpacity>
       </View>
@@ -204,5 +299,33 @@ const styles = StyleSheet.create({
     color: '#E76F51',
     fontSize: 14,
     fontWeight: 'bold',
-  }
+  },
+  phoneContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    gap: 10,
+  },
+  phoneInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  otpButton: {
+    backgroundColor: '#0D6C7E',
+    padding: 15,
+    borderRadius: 10,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  otpButtonDisabled: {
+    backgroundColor: '#ADADAD',
+  },
+  otpButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  buttonDisabled: {
+    backgroundColor: '#ADADAD',
+  },
 });

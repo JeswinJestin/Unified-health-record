@@ -42,24 +42,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoContainer: {
-    width: 200,  // Increased size for better visibility
-    height: 200, // Increased size for better visibility
-    borderRadius: 100, // Half of width/height for perfect circle
+    width: 150,
+    height: 150,
+    borderRadius: 75,
     borderWidth: 3,
-    borderColor: '#0D9DAA', // Teal/turquoise color matching your logo
+    borderColor: '#0D6C7E',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
-    padding: 20, // Add padding to prevent image from touching the border
+    marginBottom: 20,
+    padding: 18,
   },
   logo: {
-    width: '100%',
-    height: '100%',
+    width: '125%',
+    height: '125%',
   },
   appName: {
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: 'bold',
-    color: '#0D9DAA', // Matching the border color
-    letterSpacing: 2,
+    color: '#0D6C7E',
+    letterSpacing: 1,
   },
 });

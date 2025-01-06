@@ -16,7 +16,10 @@ const MEDI_COLORS = {
   SECONDARY: {
     CARE_BLUE: '#4A90E2',
     HEALTH_GREEN: '#2ECC71',
-    ALERT_RED: '#E74C3C'
+    ALERT_RED: '#E74C3C',
+    BAYMAX_PURPLE: '#9B59B6',
+    INSIGHTS_ORANGE: '#E67E22',
+    DIET_YELLOW: '#F1C40F'
   },
   NEUTRAL: {
     LIGHT_GRAY: '#F4F4F4',
@@ -216,13 +219,13 @@ const styles = StyleSheet.create({
     backgroundColor: MEDI_COLORS.SECONDARY.HEALTH_GREEN,
   },
   baymaxCard: {
-    backgroundColor: MEDI_COLORS.NEUTRAL.MEDIUM_GRAY,
+    backgroundColor: MEDI_COLORS.SECONDARY.BAYMAX_PURPLE,
   },
   insightsCard: {
-    backgroundColor: MEDI_COLORS.SECONDARY.CARE_BLUE,
+    backgroundColor: MEDI_COLORS.SECONDARY.INSIGHTS_ORANGE,
   },
   dietCard: {
-    backgroundColor: MEDI_COLORS.SECONDARY.HEALTH_GREEN,
+    backgroundColor: MEDI_COLORS.SECONDARY.DIET_YELLOW,
   },
   emergencyCard: {
     backgroundColor: MEDI_COLORS.SECONDARY.ALERT_RED,
