@@ -1,39 +1,68 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
+# Node.js dependencies
 node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
 
-# Expo
+# Expo and Metro Bundler
 .expo/
-dist/
-web-build/
-expo-env.d.ts
+.expo-shared/
+.expo-env.d.ts
+metro.config.js
+.bundle
 
-# Native
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
+# Firebase Config and API Keys
+*.env
+.env.*
+firebase-config.js
+firebase.js
 
-# Metro
-.metro-health-check*
-.env
+# Logs and Debug
+*.log
+*.log.*
+*.out
+*.err
+*.pid
 
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
+# Build output
+build/
+android/app/build/
+ios/build/
+*.xcworkspace
+*.xcuserstate
 
-# macOS
+# React Native specific
+*.pack
+*.pack.*
+*.keystore
+*.plist
+*.map
+android/.gradle/
+android/.idea/
+android/local.properties
+ios/Pods/
+ios/.DS_Store
+
+# IDE and Editor
+.vscode/
+.idea/
+*.iml
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*.lock
+
+# Generated Files
+coverage/
 .DS_Store
-*.pem
+Thumbs.db
 
-# local env files
-.env*.local
-
-# typescript
+# TypeScript
 *.tsbuildinfo
+*.d.ts
 
-app-example
+# Git merge conflicts
+*.orig
