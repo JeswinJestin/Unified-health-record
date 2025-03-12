@@ -169,6 +169,15 @@ export default function SignupScreen() {
         />
         <TextInput
           style={styles.input}
+          placeholder="Aadhaar Number"
+          placeholderTextColor="#ADADAD"
+          keyboardType="numeric"
+          autoCapitalize="none"
+          // value={formData.adhaarNumber}
+          // onChangeText={(text) => setFormData({ ...formData, adhaarNumber: text })}
+        />
+        <TextInput
+          style={styles.input}
           placeholder="Password"
           placeholderTextColor="#ADADAD"
           secureTextEntry
