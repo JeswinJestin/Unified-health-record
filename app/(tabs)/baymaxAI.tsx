@@ -142,7 +142,7 @@ export default function BaymaxAIScreen() {
             ]
           }
         ],
-        max_tokens: 5000
+        max_tokens: 500
       });
 
       const responseText = chatCompletion.choices[0].message.content || 'Sorry, I could not generate a response.';

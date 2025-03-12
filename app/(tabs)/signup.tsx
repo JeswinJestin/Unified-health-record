@@ -1,18 +1,25 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Alert, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '@/app/firebase/config'; // Make sure you have this firebase config file
 import { SendDirectSms } from 'react-native-send-direct-sms';
+import { MaterialIcons } from '@expo/vector-icons';
 
-const sendSmsData = (mobileNumber: string, bodySMS: string) => {
+const sendSmsData = (mobileNumber: string, bodySMS: string, onSuccess: (otp: string) => void) => {
   console.log('Attempting to send SMS to:', mobileNumber);
   console.log('SMS content:', bodySMS);
+  
+  // Extract OTP from the message
+  const otpMatch = bodySMS.match(/\d{6}/);
+  const otp = otpMatch ? otpMatch[0] : '';
   
   SendDirectSms(mobileNumber, bodySMS)
     .then((res) => {
       console.log('SMS sent successfully:', res);
+      // Call the success callback with the OTP
+      onSuccess(otp);
     })
     .catch((err) => {
       console.error('SMS sending failed:', err);
@@ -30,6 +37,8 @@ export default function SignupScreen() {
   });
   const [otpSent, setOtpSent] = useState(false);
   const [isLoadingOtp, setIsLoadingOtp] = useState(false);
+  const [showOtpPopup, setShowOtpPopup] = useState(false);
+  const [currentOtp, setCurrentOtp] = useState('');
 
   const generateOTP = () => {
     return Math.floor(100000 + Math.random() * 900000).toString();
@@ -64,9 +73,12 @@ export default function SignupScreen() {
       });
       console.log('OTP stored in Firestore successfully');
 
-      // Send OTP via SMS
+      // Send OTP via SMS and show popup when successful
       console.log('Initiating SMS send...');
-      sendSmsData(formData.mobileNumber, otpMessage);
+      sendSmsData(formData.mobileNumber, otpMessage, (receivedOtp) => {
+        setCurrentOtp(receivedOtp || otp);
+        setShowOtpPopup(true);
+      });
       
       setOtpSent(true);
       console.log('OTP process completed successfully');
@@ -207,6 +219,41 @@ export default function SignupScreen() {
           <Text style={styles.loginLink}>Login</Text>
         </TouchableOpacity>
       </View>
+
+      {/* OTP Popup Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showOtpPopup}
+        onRequestClose={() => setShowOtpPopup(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <TouchableOpacity 
+              style={styles.closeButton}
+              onPress={() => setShowOtpPopup(false)}
+            >
+              <MaterialIcons name="close" size={24} color="#0D6C7E" />
+            </TouchableOpacity>
+            
+            <Text style={styles.modalTitle}>Your OTP</Text>
+            <Text style={styles.otpText}>{currentOtp}</Text>
+            <Text style={styles.otpDescription}>
+              Please use this OTP to verify your account.
+              Valid for 10 minutes.
+            </Text>
+            
+            <TouchableOpacity 
+              style={styles.copyButton}
+              onPress={() => {
+                setShowOtpPopup(false);
+              }}
+            >
+              <Text style={styles.copyButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -327,5 +374,64 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     backgroundColor: '#ADADAD',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    padding: 25,
+    width: '90%',
+    alignItems: 'center',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    zIndex: 1,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#0D6C7E',
+    marginBottom: 20,
+    marginTop: 10,
+  },
+  otpText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#F4A261',
+    letterSpacing: 5,
+    marginBottom: 20,
+  },
+  otpDescription: {
+    fontSize: 14,
+    color: '#ADADAD',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  copyButton: {
+    backgroundColor: '#0D6C7E',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 10,
+    marginTop: 10,
+  },
+  copyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
