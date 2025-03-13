@@ -10,12 +10,16 @@ import {
   Linking,
   Platform,
   ScrollView,
-  Dimensions
+  Dimensions,
+  KeyboardAvoidingView,
+  StatusBar,
+  Animated,
+  PanResponder
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
-import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+import { MaterialIcons, FontAwesome5, Ionicons } from '@expo/vector-icons';
 
 // Define types for hospital data
 interface Hospital {
@@ -31,16 +35,96 @@ interface Hospital {
   rating?: number;
   open_now?: boolean;
   distance?: number;
+  photos?: any[];
 }
+
+// Google Places API Key - Replace with your actual API key
+const GOOGLE_PLACES_API_KEY = 'YOUR_GOOGLE_PLACES_API_KEY';
+
+// Get screen dimensions
+const { width, height } = Dimensions.get('window');
+const SCREEN_HEIGHT = height;
+const SCREEN_WIDTH = width;
+
+// Drawer configuration
+const DRAWER_MIN_HEIGHT = 100; // Minimum height when collapsed (just the handle and title)
+const DRAWER_PEEK_HEIGHT = SCREEN_HEIGHT * 0.25; // Height when partially open (shows a few hospitals)
+const DRAWER_MAX_HEIGHT = SCREEN_HEIGHT * 0.8; // Maximum height when fully expanded
+const DRAWER_SNAP_POINTS = [DRAWER_MIN_HEIGHT, DRAWER_PEEK_HEIGHT, DRAWER_MAX_HEIGHT];
 
 export default function EmergencyScreen() {
   const router = useRouter();
   const mapRef = useRef<MapView>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null);
+  
+  // Drawer state
+  const [drawerPosition, setDrawerPosition] = useState(1); // 0: minimized, 1: peeking, 2: expanded
+  const drawerHeight = useRef(new Animated.Value(DRAWER_PEEK_HEIGHT)).current;
+  const drawerTranslateY = useRef(new Animated.Value(SCREEN_HEIGHT - DRAWER_PEEK_HEIGHT)).current;
+  
+  // Update drawer position when drawerPosition state changes
+  useEffect(() => {
+    Animated.spring(drawerTranslateY, {
+      toValue: SCREEN_HEIGHT - DRAWER_SNAP_POINTS[drawerPosition],
+      useNativeDriver: true,
+      friction: 8,
+      tension: 40,
+    }).start();
+  }, [drawerPosition]);
+  
+  // Pan responder for drawer gestures
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Only respond to vertical gestures
+        return Math.abs(gestureState.dy) > Math.abs(gestureState.dx) && 
+               Math.abs(gestureState.dy) > 10;
+      },
+      onPanResponderGrant: () => {
+        drawerTranslateY.extractOffset();
+      },
+      onPanResponderMove: (_, gestureState) => {
+        drawerTranslateY.setValue(gestureState.dy);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        drawerTranslateY.flattenOffset();
+        
+        // Calculate current position
+        const currentPosition = SCREEN_HEIGHT - DRAWER_SNAP_POINTS[drawerPosition] + gestureState.dy;
+        
+        // Determine which snap point to go to based on velocity and position
+        let newPosition = drawerPosition;
+        
+        if (gestureState.vy > 0.5) {
+          // Fast downward swipe - go to next lower position
+          newPosition = Math.max(0, drawerPosition - 1);
+        } else if (gestureState.vy < -0.5) {
+          // Fast upward swipe - go to next higher position
+          newPosition = Math.min(2, drawerPosition + 1);
+        } else {
+          // Find the closest snap point
+          const snapPoints = DRAWER_SNAP_POINTS.map(point => SCREEN_HEIGHT - point);
+          const deltas = snapPoints.map(point => Math.abs(currentPosition - point));
+          const closestIndex = deltas.indexOf(Math.min(...deltas));
+          newPosition = closestIndex;
+        }
+        
+        // Update position state
+        setDrawerPosition(newPosition);
+      }
+    })
+  ).current;
+  
+  // Function to toggle drawer position
+  const toggleDrawer = () => {
+    const nextPosition = drawerPosition === 2 ? 1 : 2;
+    setDrawerPosition(nextPosition);
+  };
 
   // Get user location and nearby hospitals on component mount
   useEffect(() => {
@@ -70,67 +154,90 @@ export default function EmergencyScreen() {
     })();
   }, []);
 
+  // Calculate distance between two coordinates in kilometers
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Radius of the earth in km
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2); 
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    const distance = R * c; // Distance in km
+    return parseFloat(distance.toFixed(1));
+  };
+  
+  const deg2rad = (deg: number) => {
+    return deg * (Math.PI/180);
+  };
+
   // Function to search for nearby hospitals using Google Places API
   const searchNearbyHospitals = async (userLocation: Location.LocationObject) => {
     try {
-      // In a real app, you would use a proper API key and make a fetch request to Google Places API
-      // For demo purposes, we'll use mock data
-      const mockHospitals: Hospital[] = [
-        {
-          id: '1',
-          name: 'City General Hospital',
-          vicinity: '123 Main St, City',
+      const { latitude, longitude } = userLocation.coords;
+      
+      // If API key is not set, use mock data
+      if (GOOGLE_PLACES_API_KEY === 'YOUR_GOOGLE_PLACES_API_KEY') {
+        console.warn('Using mock data. Please set your Google Places API key.');
+        useMockData(userLocation);
+        return;
+      }
+      
+      // Fetch nearby hospitals from Google Places API
+      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=5000&type=hospital&key=${GOOGLE_PLACES_API_KEY}`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.status !== 'OK') {
+        console.error('Google Places API error:', data.status);
+        useMockData(userLocation);
+        return;
+      }
+      
+      // Process and sort the results
+      const hospitalResults = data.results.map((place: any) => {
+        const distance = calculateDistance(
+          latitude,
+          longitude,
+          place.geometry.location.lat,
+          place.geometry.location.lng
+        );
+        
+        return {
+          id: place.place_id,
+          name: place.name,
+          vicinity: place.vicinity,
           geometry: {
             location: {
-              lat: userLocation.coords.latitude + 0.01,
-              lng: userLocation.coords.longitude + 0.01
+              lat: place.geometry.location.lat,
+              lng: place.geometry.location.lng
             }
           },
-          rating: 4.5,
-          open_now: true,
-          distance: 1.2
-        },
-        {
-          id: '2',
-          name: 'Community Medical Center',
-          vicinity: '456 Oak Ave, City',
-          geometry: {
-            location: {
-              lat: userLocation.coords.latitude - 0.01,
-              lng: userLocation.coords.longitude - 0.01
-            }
-          },
-          rating: 4.2,
-          open_now: true,
-          distance: 1.8
-        },
-        {
-          id: '3',
-          name: 'Emergency Care Clinic',
-          vicinity: '789 Pine St, City',
-          geometry: {
-            location: {
-              lat: userLocation.coords.latitude + 0.015,
-              lng: userLocation.coords.longitude - 0.015
-            }
-          },
-          rating: 3.9,
-          open_now: true,
-          distance: 2.3
-        }
-      ];
-
-      setHospitals(mockHospitals);
+          rating: place.rating,
+          open_now: place.opening_hours?.open_now,
+          distance: distance,
+          photos: place.photos
+        };
+      });
+      
+      // Sort by distance
+      hospitalResults.sort((a: Hospital, b: Hospital) => {
+        return (a.distance || 0) - (b.distance || 0);
+      });
+      
+      setHospitals(hospitalResults);
       setLoading(false);
-
+      
       // Fit map to show all markers
-      if (mockHospitals.length > 0 && mapRef.current) {
+      if (hospitalResults.length > 0 && mapRef.current) {
         const coordinates = [
           { 
-            latitude: userLocation.coords.latitude, 
-            longitude: userLocation.coords.longitude 
+            latitude: latitude, 
+            longitude: longitude 
           },
-          ...mockHospitals.map(hospital => ({
+          ...hospitalResults.slice(0, 5).map((hospital: { geometry: { location: { lat: any; lng: any; }; }; }) => ({
             latitude: hospital.geometry.location.lat,
             longitude: hospital.geometry.location.lng
           }))
@@ -143,8 +250,108 @@ export default function EmergencyScreen() {
       }
     } catch (error) {
       console.error('Error searching for hospitals:', error);
-      setErrorMsg('Could not find nearby hospitals. Please try again.');
-      setLoading(false);
+      setErrorMsg('Could not find nearby hospitals. Using mock data instead.');
+      useMockData(userLocation);
+    }
+  };
+
+  // Fallback to mock data if API fails
+  const useMockData = (userLocation: Location.LocationObject) => {
+    const { latitude, longitude } = userLocation.coords;
+    
+    const mockHospitals: Hospital[] = [
+      {
+        id: '1',
+        name: 'City General Hospital',
+        vicinity: '123 Main St, City',
+        geometry: {
+          location: {
+            lat: latitude + 0.01,
+            lng: longitude + 0.01
+          }
+        },
+        rating: 4.5,
+        open_now: true,
+        distance: 1.2
+      },
+      {
+        id: '2',
+        name: 'Community Medical Center',
+        vicinity: '456 Oak Ave, City',
+        geometry: {
+          location: {
+            lat: latitude - 0.01,
+            lng: longitude - 0.01
+          }
+        },
+        rating: 4.2,
+        open_now: true,
+        distance: 1.8
+      },
+      {
+        id: '3',
+        name: 'Emergency Care Clinic',
+        vicinity: '789 Pine St, City',
+        geometry: {
+          location: {
+            lat: latitude + 0.015,
+            lng: longitude - 0.015
+          }
+        },
+        rating: 3.9,
+        open_now: true,
+        distance: 2.3
+      },
+      {
+        id: '4',
+        name: 'University Hospital',
+        vicinity: '101 College Rd, City',
+        geometry: {
+          location: {
+            lat: latitude - 0.02,
+            lng: longitude + 0.02
+          }
+        },
+        rating: 4.7,
+        open_now: true,
+        distance: 3.1
+      },
+      {
+        id: '5',
+        name: 'Children\'s Medical Center',
+        vicinity: '202 Kids Ave, City',
+        geometry: {
+          location: {
+            lat: latitude + 0.025,
+            lng: longitude + 0.025
+          }
+        },
+        rating: 4.8,
+        open_now: false,
+        distance: 3.5
+      }
+    ];
+
+    setHospitals(mockHospitals);
+    setLoading(false);
+
+    // Fit map to show all markers
+    if (mockHospitals.length > 0 && mapRef.current) {
+      const coordinates = [
+        { 
+          latitude: latitude, 
+          longitude: longitude 
+        },
+        ...mockHospitals.map(hospital => ({
+          latitude: hospital.geometry.location.lat,
+          longitude: hospital.geometry.location.lng
+        }))
+      ];
+
+      mapRef.current.fitToCoordinates(coordinates, {
+        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+        animated: true
+      });
     }
   };
 
@@ -184,8 +391,12 @@ export default function EmergencyScreen() {
     );
   };
 
+  // Calculate map height based on drawer position
+  const mapHeight = SCREEN_HEIGHT - 60; // Full height minus header
+
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.header}>
         <Text style={styles.headerText}>Emergency</Text>
         <TouchableOpacity 
@@ -230,7 +441,7 @@ export default function EmergencyScreen() {
       ) : (
         <View style={styles.contentContainer}>
           {/* Map View */}
-          <View style={styles.mapContainer}>
+          <View style={[styles.mapContainer, { height: mapHeight }]}>
             <MapView
               ref={mapRef}
               style={styles.map}
@@ -270,7 +481,13 @@ export default function EmergencyScreen() {
                   pinColor="#E74C3C"
                   title={hospital.name}
                   description={hospital.vicinity}
-                  onPress={() => setSelectedHospital(hospital)}
+                  onPress={() => {
+                    setSelectedHospital(hospital);
+                    // If drawer is minimized, open it to peek
+                    if (drawerPosition === 0) {
+                      setDrawerPosition(1);
+                    }
+                  }}
                 >
                   <Callout tooltip>
                     <View style={styles.calloutContainer}>
@@ -292,73 +509,114 @@ export default function EmergencyScreen() {
             </MapView>
           </View>
 
-          {/* Hospital List */}
-          <View style={styles.hospitalsContainer}>
-            <Text style={styles.hospitalsTitle}>Nearby Hospitals</Text>
-            <ScrollView style={styles.hospitalsList}>
-              {hospitals.map(hospital => (
-                <TouchableOpacity
-                  key={hospital.id}
-                  style={[
-                    styles.hospitalItem,
-                    selectedHospital?.id === hospital.id && styles.selectedHospitalItem
-                  ]}
-                  onPress={() => {
-                    setSelectedHospital(hospital);
-                    // Center map on selected hospital
-                    mapRef.current?.animateToRegion({
-                      latitude: hospital.geometry.location.lat,
-                      longitude: hospital.geometry.location.lng,
-                      latitudeDelta: 0.01,
-                      longitudeDelta: 0.01,
-                    }, 500);
-                  }}
-                >
-                  <View style={styles.hospitalInfo}>
-                    <Text style={styles.hospitalName}>{hospital.name}</Text>
-                    <Text style={styles.hospitalAddress}>{hospital.vicinity}</Text>
-                    <View style={styles.hospitalDetails}>
-                      {hospital.distance && (
+          {/* Drawer for Hospital List */}
+          <Animated.View 
+            style={[
+              styles.drawer,
+              {
+                transform: [{ translateY: drawerTranslateY }]
+              }
+            ]}
+          >
+            {/* Drawer Handle */}
+            <View style={styles.drawerHandle} {...panResponder.panHandlers}>
+              <View style={styles.drawerHandleBar} />
+              <TouchableOpacity 
+                style={styles.drawerToggleButton}
+                onPress={toggleDrawer}
+              >
+                <Ionicons 
+                  name={drawerPosition === 2 ? "chevron-down" : "chevron-up"} 
+                  size={24} 
+                  color="#0D6C7E" 
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Drawer Content */}
+            <View style={styles.drawerContent}>
+              <Text style={styles.hospitalsTitle}>
+                Nearby Hospitals ({hospitals.length})
+              </Text>
+              
+              <ScrollView 
+                ref={scrollViewRef}
+                style={styles.hospitalsList}
+                contentContainerStyle={styles.hospitalsListContent}
+                showsVerticalScrollIndicator={true}
+                scrollEventThrottle={16}
+                nestedScrollEnabled={true}
+              >
+                {hospitals.map(hospital => (
+                  <TouchableOpacity
+                    key={hospital.id}
+                    style={[
+                      styles.hospitalItem,
+                      selectedHospital?.id === hospital.id && styles.selectedHospitalItem
+                    ]}
+                    onPress={() => {
+                      setSelectedHospital(hospital);
+                      // Center map on selected hospital
+                      mapRef.current?.animateToRegion({
+                        latitude: hospital.geometry.location.lat,
+                        longitude: hospital.geometry.location.lng,
+                        latitudeDelta: 0.01,
+                        longitudeDelta: 0.01,
+                      }, 500);
+                      
+                      // If drawer is fully expanded, collapse it to peek to see the map better
+                      if (drawerPosition === 2) {
+                        setDrawerPosition(1);
+                      }
+                    }}
+                  >
+                    <View style={styles.hospitalInfo}>
+                      <Text style={styles.hospitalName}>{hospital.name}</Text>
+                      <Text style={styles.hospitalAddress}>{hospital.vicinity}</Text>
+                      <View style={styles.hospitalDetails}>
+                        {hospital.distance !== undefined && (
+                          <View style={styles.detailItem}>
+                            <MaterialIcons name="directions" size={14} color="#0D6C7E" />
+                            <Text style={styles.detailText}>{hospital.distance} km</Text>
+                          </View>
+                        )}
+                        {hospital.rating && (
+                          <View style={styles.detailItem}>
+                            <MaterialIcons name="star" size={14} color="#F1C40F" />
+                            <Text style={styles.detailText}>{hospital.rating}</Text>
+                          </View>
+                        )}
                         <View style={styles.detailItem}>
-                          <MaterialIcons name="directions" size={14} color="#0D6C7E" />
-                          <Text style={styles.detailText}>{hospital.distance} km</Text>
+                          <MaterialIcons 
+                            name="circle" 
+                            size={14} 
+                            color={hospital.open_now ? "#4CAF50" : "#E74C3C"} 
+                          />
+                          <Text style={styles.detailText}>
+                            {hospital.open_now ? 'Open' : 'Closed'}
+                          </Text>
                         </View>
-                      )}
-                      {hospital.rating && (
-                        <View style={styles.detailItem}>
-                          <MaterialIcons name="star" size={14} color="#F1C40F" />
-                          <Text style={styles.detailText}>{hospital.rating}</Text>
-                        </View>
-                      )}
-                      <View style={styles.detailItem}>
-                        <MaterialIcons 
-                          name="circle" 
-                          size={14} 
-                          color={hospital.open_now ? "#4CAF50" : "#E74C3C"} 
-                        />
-                        <Text style={styles.detailText}>
-                          {hospital.open_now ? 'Open' : 'Closed'}
-                        </Text>
                       </View>
                     </View>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.directionsButton}
-                    onPress={() => getDirections(hospital)}
-                  >
-                    <MaterialIcons name="directions" size={24} color="#FFFFFF" />
+                    <TouchableOpacity
+                      style={styles.directionsButton}
+                      onPress={() => getDirections(hospital)}
+                    >
+                      <MaterialIcons name="directions" size={24} color="#FFFFFF" />
+                    </TouchableOpacity>
                   </TouchableOpacity>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+                ))}
+                
+                {/* Add some padding at the bottom for better scrolling */}
+                <View style={styles.listFooter} />
+              </ScrollView>
+            </View>
+          </Animated.View>
         </View>
       )}
     </SafeAreaView>
   );
 }
-
-const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
@@ -373,6 +631,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    zIndex: 10,
   },
   headerText: {
     fontSize: 24,
@@ -428,13 +687,130 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
+    position: 'relative',
   },
   mapContainer: {
-    height: height * 0.4,
     width: '100%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1,
   },
   map: {
     ...StyleSheet.absoluteFillObject,
+  },
+  drawer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: DRAWER_MAX_HEIGHT,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 10,
+    zIndex: 2,
+  },
+  drawerHandle: {
+    height: 50,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    backgroundColor: '#FFFFFF',
+  },
+  drawerHandleBar: {
+    width: 40,
+    height: 5,
+    backgroundColor: '#CCCCCC',
+    borderRadius: 2.5,
+    marginBottom: 10,
+  },
+  drawerToggleButton: {
+    position: 'absolute',
+    right: 20,
+    top: 12,
+  },
+  drawerContent: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  hospitalsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0D6C7E',
+    marginBottom: 12,
+    marginTop: 5,
+  },
+  hospitalsList: {
+    flex: 1,
+  },
+  hospitalsListContent: {
+    paddingBottom: 20,
+  },
+  hospitalItem: {
+    flexDirection: 'row',
+    backgroundColor: '#F8F8F8',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  selectedHospitalItem: {
+    borderWidth: 2,
+    borderColor: '#0D6C7E',
+  },
+  hospitalInfo: {
+    flex: 1,
+  },
+  hospitalName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0D6C7E',
+    marginBottom: 4,
+  },
+  hospitalAddress: {
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 8,
+  },
+  hospitalDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+    marginBottom: 4,
+  },
+  detailText: {
+    fontSize: 14,
+    color: '#666666',
+    marginLeft: 4,
+  },
+  directionsButton: {
+    backgroundColor: '#0D6C7E',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+  },
+  listFooter: {
+    height: 20,
   },
   calloutContainer: {
     width: 200,
@@ -473,75 +849,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#4CAF50',
   },
-  hospitalsContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    marginTop: -20,
-    paddingTop: 20,
-    paddingHorizontal: 16,
-  },
-  hospitalsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0D6C7E',
-    marginBottom: 12,
-  },
-  hospitalsList: {
-    flex: 1,
-  },
-  hospitalItem: {
-    flexDirection: 'row',
-    backgroundColor: '#F8F8F8',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  selectedHospitalItem: {
-    borderWidth: 2,
-    borderColor: '#0D6C7E',
-  },
-  hospitalInfo: {
-    flex: 1,
-  },
-  hospitalName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0D6C7E',
-    marginBottom: 4,
-  },
-  hospitalAddress: {
-    fontSize: 14,
-    color: '#666666',
-    marginBottom: 8,
-  },
-  hospitalDetails: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  detailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  detailText: {
-    fontSize: 14,
-    color: '#666666',
-    marginLeft: 4,
-  },
-  directionsButton: {
-    backgroundColor: '#0D6C7E',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    alignSelf: 'center',
-  },
-}); 
+});
