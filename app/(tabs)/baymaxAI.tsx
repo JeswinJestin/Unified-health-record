@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { sendChatMessage } from '../services/chatbotapi';
 import { 
   View, 
   Text, 
@@ -13,7 +14,6 @@ import {
   KeyboardAvoidingView
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { HfInference } from '@huggingface/inference';
 import { useAuth } from '../../context/AuthContext';
 import Animated, { 
   useAnimatedStyle, 
@@ -96,8 +96,6 @@ export default function BaymaxAIScreen() {
     return <Animated.Text style={[styles.cursor, animatedStyle]}>|</Animated.Text>;
   };
 
-  const client = new HfInference(process.env.EXPO_PUBLIC_HF_API_KEY);
-
   const sendMessage = async () => {
     if (!inputMessage.trim()) return;
 
@@ -120,32 +118,8 @@ export default function BaymaxAIScreen() {
       
       setMessages(prev => [...prev, typingMessage]);
 
-      const chatCompletion = await client.chatCompletion({
-        model: "meta-llama/Llama-3.2-11B-Vision-Instruct",
-        messages: [
-          {
-            role: "system",
-            content: [
-              {
-                type: "text",
-                text: "You are Baymax AI, a medical assistant. Provide helpful medical information and always include appropriate disclaimers."
-              }
-            ]
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: inputMessage
-              }
-            ]
-          }
-        ],
-        max_tokens: 500
-      });
-
-      const responseText = chatCompletion.choices[0].message.content || 'Sorry, I could not generate a response.';
+      // Use the API service instead of direct client call
+      const responseText = await sendChatMessage(inputMessage);
       let currentIndex = 0;
 
       const startTypingAnimation = () => {
