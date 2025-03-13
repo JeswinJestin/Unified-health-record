@@ -96,7 +96,12 @@ export default function BaymaxAIScreen() {
     return <Animated.Text style={[styles.cursor, animatedStyle]}>|</Animated.Text>;
   };
 
-  const client = new HfInference(process.env.EXPO_PUBLIC_HF_API_KEY);
+  // Initialize Hugging Face client with API key
+  const apiKey = process.env.EXPO_PUBLIC_HF_API_KEY;
+  console.log("API Key available:", apiKey ? "Yes" : "No");
+  
+  // Create client only if API key is available
+  const client = apiKey ? new HfInference(apiKey) : null;
 
   const sendMessage = async () => {
     if (!inputMessage.trim()) return;
@@ -112,6 +117,11 @@ export default function BaymaxAIScreen() {
     setIsLoading(true);
 
     try {
+      // Check if client is initialized
+      if (!client) {
+        throw new Error("API key not configured. Please check your environment variables.");
+      }
+
       const typingMessage: Message = {
         role: 'assistant',
         content: '',
@@ -183,11 +193,15 @@ export default function BaymaxAIScreen() {
 
     } catch (error) {
       console.error('Error:', error);
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'I apologize, but I encountered an error. Please try again.';
+      
       setMessages(prev => [
         ...prev.slice(0, -1),
         {
           role: 'assistant',
-          content: 'I apologize, but I encountered an error. Please try again.',
+          content: `Error: ${errorMessage}. Please check your API key configuration or try again later.`,
           isTyping: false
         }
       ]);
