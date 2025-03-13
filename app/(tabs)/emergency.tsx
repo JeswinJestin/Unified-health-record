@@ -11,7 +11,9 @@ import {
   Platform,
   ScrollView,
   Dimensions,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  Animated,
+  PanResponder
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
@@ -38,6 +40,11 @@ interface Hospital {
 // Google Places API Key - Replace with your actual API key
 const GOOGLE_PLACES_API_KEY = 'YOUR_GOOGLE_PLACES_API_KEY';
 
+const { width, height } = Dimensions.get('window');
+const DRAWER_COLLAPSED_HEIGHT = 60;
+const DRAWER_EXPANDED_HEIGHT = height * 0.6;
+const NAV_BAR_HEIGHT = 80; // Height of the bottom navigation bar
+
 export default function EmergencyScreen() {
   const router = useRouter();
   const mapRef = useRef<MapView>(null);
@@ -47,6 +54,45 @@ export default function EmergencyScreen() {
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null);
+  const [isDrawerExpanded, setIsDrawerExpanded] = useState(true);
+  const drawerAnimation = useRef(new Animated.Value(DRAWER_EXPANDED_HEIGHT)).current as Animated.Value;
+
+  const toggleDrawer = () => {
+    const toValue = isDrawerExpanded ? DRAWER_COLLAPSED_HEIGHT : DRAWER_EXPANDED_HEIGHT;
+    Animated.spring(drawerAnimation, {
+      toValue,
+      useNativeDriver: false,
+      friction: 8,
+      tension: 40
+    }).start();
+    setIsDrawerExpanded(!isDrawerExpanded);
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dy) > 10;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        const newHeight = Math.max(
+          DRAWER_COLLAPSED_HEIGHT,
+          Math.min(DRAWER_EXPANDED_HEIGHT, DRAWER_EXPANDED_HEIGHT - gestureState.dy)
+        );
+        drawerAnimation.setValue(newHeight);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const shouldExpand = gestureState.vy < 0;
+        
+        Animated.spring(drawerAnimation, {
+          toValue: shouldExpand ? DRAWER_EXPANDED_HEIGHT : DRAWER_COLLAPSED_HEIGHT,
+          useNativeDriver: false,
+          friction: 8,
+          tension: 40
+        }).start();
+        setIsDrawerExpanded(shouldExpand);
+      }
+    })
+  ).current;
 
   // Get user location and nearby hospitals on component mount
   useEffect(() => {
@@ -159,7 +205,7 @@ export default function EmergencyScreen() {
             latitude: latitude, 
             longitude: longitude 
           },
-          ...hospitalResults.slice(0, 5).map(hospital => ({
+          ...hospitalResults.slice(0, 5).map((hospital: { geometry: { location: { lat: any; lng: any; }; }; }) => ({
             latitude: hospital.geometry.location.lat,
             longitude: hospital.geometry.location.lng
           }))
@@ -362,7 +408,7 @@ export default function EmergencyScreen() {
           style={styles.contentContainer}
         >
           {/* Map View */}
-          <View style={styles.mapContainer}>
+          <View style={[styles.mapContainer, { height: isDrawerExpanded ? height * 0.4 : height - DRAWER_COLLAPSED_HEIGHT - 80 }]}>
             <MapView
               ref={mapRef}
               style={styles.map}
@@ -424,86 +470,110 @@ export default function EmergencyScreen() {
             </MapView>
           </View>
 
-          {/* Hospital List */}
-          <View style={styles.hospitalsContainer}>
+          {/* Collapsible Hospital List */}
+          <Animated.View 
+            style={[
+              styles.hospitalsContainer,
+              {
+                height: drawerAnimation,
+                position: 'absolute',
+                bottom: NAV_BAR_HEIGHT, // Position above nav bar
+                left: 0,
+                right: 0,
+                zIndex: 1000, // Ensure it's above other elements
+              }
+            ]}
+          >
+            {/* Drawer Handle */}
+            <View {...panResponder.panHandlers} style={styles.drawerHandle}>
+              <View style={styles.handleBar} />
+              <TouchableOpacity onPress={toggleDrawer} style={styles.toggleButton}>
+                <MaterialIcons 
+                  name={isDrawerExpanded ? "keyboard-arrow-down" : "keyboard-arrow-up"} 
+                  size={24} 
+                  color="#0D6C7E" 
+                />
+              </TouchableOpacity>
+            </View>
+
             <Text style={styles.hospitalsTitle}>
               Nearby Hospitals ({hospitals.length})
             </Text>
             
-            <ScrollView 
-              ref={scrollViewRef}
-              style={styles.hospitalsList}
-              contentContainerStyle={styles.hospitalsListContent}
-              showsVerticalScrollIndicator={true}
-              scrollEventThrottle={16}
-              nestedScrollEnabled={true}
-            >
-              {hospitals.map(hospital => (
-                <TouchableOpacity
-                  key={hospital.id}
-                  style={[
-                    styles.hospitalItem,
-                    selectedHospital?.id === hospital.id && styles.selectedHospitalItem
-                  ]}
-                  onPress={() => {
-                    setSelectedHospital(hospital);
-                    // Center map on selected hospital
-                    mapRef.current?.animateToRegion({
-                      latitude: hospital.geometry.location.lat,
-                      longitude: hospital.geometry.location.lng,
-                      latitudeDelta: 0.01,
-                      longitudeDelta: 0.01,
-                    }, 500);
-                  }}
-                >
-                  <View style={styles.hospitalInfo}>
-                    <Text style={styles.hospitalName}>{hospital.name}</Text>
-                    <Text style={styles.hospitalAddress}>{hospital.vicinity}</Text>
-                    <View style={styles.hospitalDetails}>
-                      {hospital.distance !== undefined && (
+            {isDrawerExpanded && (
+              <ScrollView 
+                ref={scrollViewRef}
+                style={styles.hospitalsList}
+                contentContainerStyle={styles.hospitalsListContent}
+                showsVerticalScrollIndicator={true}
+                scrollEventThrottle={16}
+                nestedScrollEnabled={true}
+              >
+                {hospitals.map(hospital => (
+                  <TouchableOpacity
+                    key={hospital.id}
+                    style={[
+                      styles.hospitalItem,
+                      selectedHospital?.id === hospital.id && styles.selectedHospitalItem
+                    ]}
+                    onPress={() => {
+                      setSelectedHospital(hospital);
+                      // Center map on selected hospital
+                      mapRef.current?.animateToRegion({
+                        latitude: hospital.geometry.location.lat,
+                        longitude: hospital.geometry.location.lng,
+                        latitudeDelta: 0.01,
+                        longitudeDelta: 0.01,
+                      }, 500);
+                    }}
+                  >
+                    <View style={styles.hospitalInfo}>
+                      <Text style={styles.hospitalName}>{hospital.name}</Text>
+                      <Text style={styles.hospitalAddress}>{hospital.vicinity}</Text>
+                      <View style={styles.hospitalDetails}>
+                        {hospital.distance !== undefined && (
+                          <View style={styles.detailItem}>
+                            <MaterialIcons name="directions" size={14} color="#0D6C7E" />
+                            <Text style={styles.detailText}>{hospital.distance} km</Text>
+                          </View>
+                        )}
+                        {hospital.rating && (
+                          <View style={styles.detailItem}>
+                            <MaterialIcons name="star" size={14} color="#F1C40F" />
+                            <Text style={styles.detailText}>{hospital.rating}</Text>
+                          </View>
+                        )}
                         <View style={styles.detailItem}>
-                          <MaterialIcons name="directions" size={14} color="#0D6C7E" />
-                          <Text style={styles.detailText}>{hospital.distance} km</Text>
+                          <MaterialIcons 
+                            name="circle" 
+                            size={14} 
+                            color={hospital.open_now ? "#4CAF50" : "#E74C3C"} 
+                          />
+                          <Text style={styles.detailText}>
+                            {hospital.open_now ? 'Open' : 'Closed'}
+                          </Text>
                         </View>
-                      )}
-                      {hospital.rating && (
-                        <View style={styles.detailItem}>
-                          <MaterialIcons name="star" size={14} color="#F1C40F" />
-                          <Text style={styles.detailText}>{hospital.rating}</Text>
-                        </View>
-                      )}
-                      <View style={styles.detailItem}>
-                        <MaterialIcons 
-                          name="circle" 
-                          size={14} 
-                          color={hospital.open_now ? "#4CAF50" : "#E74C3C"} 
-                        />
-                        <Text style={styles.detailText}>
-                          {hospital.open_now ? 'Open' : 'Closed'}
-                        </Text>
                       </View>
                     </View>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.directionsButton}
-                    onPress={() => getDirections(hospital)}
-                  >
-                    <MaterialIcons name="directions" size={24} color="#FFFFFF" />
+                    <TouchableOpacity
+                      style={styles.directionsButton}
+                      onPress={() => getDirections(hospital)}
+                    >
+                      <MaterialIcons name="directions" size={24} color="#FFFFFF" />
+                    </TouchableOpacity>
                   </TouchableOpacity>
-                </TouchableOpacity>
-              ))}
-              
-              {/* Add some padding at the bottom for better scrolling */}
-              <View style={styles.listFooter} />
-            </ScrollView>
-          </View>
+                ))}
+                
+                {/* Add some padding at the bottom for better scrolling */}
+                <View style={styles.listFooter} />
+              </ScrollView>
+            )}
+          </Animated.View>
         </KeyboardAvoidingView>
       )}
     </SafeAreaView>
   );
 }
-
-const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
@@ -575,8 +645,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mapContainer: {
-    height: height * 0.4,
     width: '100%',
+    height: height - NAV_BAR_HEIGHT,
   },
   map: {
     ...StyleSheet.absoluteFillObject,
@@ -619,22 +689,44 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
   },
   hospitalsContainer: {
-    flex: 1,
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    marginTop: -20,
-    paddingTop: 20,
-    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 15,
+    overflow: 'hidden',
+  },
+  drawerHandle: {
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  handleBar: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#0D6C7E',
+    borderRadius: 2,
+  },
+  toggleButton: {
+    position: 'absolute',
+    right: 16,
+    top: 8,
   },
   hospitalsTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#0D6C7E',
-    marginBottom: 12,
+    marginVertical: 12,
+    marginHorizontal: 16,
   },
   hospitalsList: {
     flex: 1,
+    paddingHorizontal: 16,
   },
   hospitalsListContent: {
     paddingBottom: 20,
