@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { sendChatMessage } from '../services/chatbotapi';
 import { 
   View, 
   Text, 
@@ -13,7 +14,6 @@ import {
   KeyboardAvoidingView
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { HfInference } from '@huggingface/inference';
 import { useAuth } from '../../context/AuthContext';
 import Animated, { 
   useAnimatedStyle, 
@@ -96,13 +96,6 @@ export default function BaymaxAIScreen() {
     return <Animated.Text style={[styles.cursor, animatedStyle]}>|</Animated.Text>;
   };
 
-  // Initialize Hugging Face client with API key
-  const apiKey = process.env.EXPO_PUBLIC_HF_API_KEY;
-  console.log("API Key available:", apiKey ? "Yes" : "No");
-  
-  // Create client only if API key is available
-  const client = apiKey ? new HfInference(apiKey) : null;
-
   const sendMessage = async () => {
     if (!inputMessage.trim()) return;
 
@@ -117,11 +110,6 @@ export default function BaymaxAIScreen() {
     setIsLoading(true);
 
     try {
-      // Check if client is initialized
-      if (!client) {
-        throw new Error("API key not configured. Please check your environment variables.");
-      }
-
       const typingMessage: Message = {
         role: 'assistant',
         content: '',
@@ -130,32 +118,8 @@ export default function BaymaxAIScreen() {
       
       setMessages(prev => [...prev, typingMessage]);
 
-      const chatCompletion = await client.chatCompletion({
-        model: "meta-llama/Llama-3.2-11B-Vision-Instruct",
-        messages: [
-          {
-            role: "system",
-            content: [
-              {
-                type: "text",
-                text: "You are Baymax AI, a medical assistant. Provide helpful medical information and always include appropriate disclaimers."
-              }
-            ]
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: inputMessage
-              }
-            ]
-          }
-        ],
-        max_tokens: 500
-      });
-
-      const responseText = chatCompletion.choices[0].message.content || 'Sorry, I could not generate a response.';
+      // Use the API service instead of direct client call
+      const responseText = await sendChatMessage(inputMessage);
       let currentIndex = 0;
 
       const startTypingAnimation = () => {
@@ -193,15 +157,11 @@ export default function BaymaxAIScreen() {
 
     } catch (error) {
       console.error('Error:', error);
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : 'I apologize, but I encountered an error. Please try again.';
-      
       setMessages(prev => [
         ...prev.slice(0, -1),
         {
           role: 'assistant',
-          content: `Error: ${errorMessage}. Please check your API key configuration or try again later.`,
+          content: 'I apologize, but I encountered an error. Please try again.',
           isTyping: false
         }
       ]);
