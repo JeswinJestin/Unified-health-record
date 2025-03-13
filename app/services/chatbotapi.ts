@@ -7,30 +7,20 @@ export const sendChatMessage = async (message: string): Promise<string> => {
     console.log("Attempting API call with key:", 
                 process.env.EXPO_PUBLIC_HF_API_KEY?.substring(0, 5) + "...");
     
-    // Try with a more accessible model
+    // Use a truly open-access chat model
     const chatCompletion = await client.chatCompletion({
-      model: "mistralai/Mistral-7B-Instruct-v0.2", // More accessible model
+      model: "meta-llama/Llama-3.2-11B-Vision-Instruct", // Open-access chat model
       messages: [
         {
           role: "system",
-          content: [
-            {
-              type: "text",
-              text: "You are Baymax AI, a medical assistant. Provide helpful medical information and always include appropriate disclaimers."
-            }
-          ]
+          content: "You are Baymax AI, a medical assistant. Provide ONLY specific, factual medical information. Keep all responses under 10 sentences. Include a very brief disclaimer when needed. Do not add greetings, explanations, or ask follow-up questions. Focus only on answering the user's question directly."
         },
         {
           role: "user",
-          content: [
-            {
-              type: "text",
-              text: message
-            }
-          ]
+          content: message
         }
       ],
-      max_tokens: 500
+      max_tokens: 200
     });
 
     return chatCompletion.choices[0].message.content || 
