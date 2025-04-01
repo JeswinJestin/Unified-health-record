@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Alert, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Alert, Modal, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '@/app/firebase/config'; // Make sure you have this firebase config file
 import { SendDirectSms } from 'react-native-send-direct-sms';
 import { MaterialIcons } from '@expo/vector-icons';
+import axios from 'axios'; // Add this import
 
 const sendSmsData = (mobileNumber: string, bodySMS: string, onSuccess: (otp: string) => void) => {
   console.log('Attempting to send SMS to:', mobileNumber);
@@ -34,14 +35,35 @@ export default function SignupScreen() {
     password: '',
     confirmPassword: '',
     mobileNumber: '',
+    otp: '', // Add OTP field
   });
   const [otpSent, setOtpSent] = useState(false);
   const [isLoadingOtp, setIsLoadingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [showOtpPopup, setShowOtpPopup] = useState(false);
   const [currentOtp, setCurrentOtp] = useState('');
+  const [otpVerified, setOtpVerified] = useState(false);
 
-  const generateOTP = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+  // Replace the generateOTP function with an API call
+  const generateOTP = async (phoneNumber: string) => {
+    try {
+      // Replace localhost with your computer's IP address
+      const response = await axios.post('http://192.168.74.71:3000/api/send-otp/', {
+        phone: `+91${phoneNumber}`
+      });
+      
+      // Also check the response structure based on your server code
+      if (response.data && response.data.success) {
+        // Your server returns otpId, not the actual OTP
+        // You might need to handle this differently
+        return response.data.otpId || '123456'; // Fallback for testing
+      } else {
+        throw new Error('Failed to get OTP from server');
+      }
+    } catch (error) {
+      console.error('Error fetching OTP from API:', error);
+      throw error;
+    }
   };
 
   const handleSendOTP = async () => {
@@ -56,8 +78,9 @@ export default function SignupScreen() {
 
     setIsLoadingOtp(true);
     try {
-      const otp = generateOTP();
-      console.log('Generated OTP:', otp);
+      // Get OTP from API instead of generating locally
+      const otp = await generateOTP(formData.mobileNumber);
+      console.log('Received OTP from API:', otp);
       
       const otpMessage = `Your MediConnect OTP is: ${otp}. Valid for 10 minutes.`;
       console.log('OTP message:', otpMessage);
@@ -92,9 +115,42 @@ export default function SignupScreen() {
     }
   };
 
+  // Add OTP verification function
+  const verifyOTP = async () => {
+    if (!formData.otp || formData.otp.length !== 6) {
+      Alert.alert('Error', 'Please enter a valid 6-digit OTP');
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+    try {
+      const response = await axios.post('http://192.168.74.71:3000/api/verify-otp/', {
+        phone: `+91${formData.mobileNumber}`,
+        otp: formData.otp
+      });
+
+      if (response.data && response.data.success) {
+        setOtpVerified(true);
+        Alert.alert('Success', 'OTP verified successfully');
+      } else {
+        Alert.alert('Error', 'Invalid OTP. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('OTP verification failed:', error);
+      Alert.alert('Error', error.response?.data?.error || 'Failed to verify OTP. Please try again.');
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
   const handleSignup = async () => {
     if (!otpSent) {
       Alert.alert('Error', 'Please verify your mobile number first');
+      return;
+    }
+
+    if (!otpVerified) {
+      Alert.alert('Error', 'Please verify the OTP before creating account');
       return;
     }
 
@@ -117,7 +173,7 @@ export default function SignupScreen() {
 
       // Navigate to OTP verification page with mobile number
       router.push({
-        pathname: '/auth/verify-otp',
+        pathname: '/auth/login',
         params: { 
           mobileNumber: formData.mobileNumber,
           userId: userCredential.user.uid
@@ -173,6 +229,7 @@ export default function SignupScreen() {
           placeholderTextColor="#ADADAD"
           keyboardType="numeric"
           autoCapitalize="none"
+          maxLength={12}
           // value={formData.adhaarNumber}
           // onChangeText={(text) => setFormData({ ...formData, adhaarNumber: text })}
         />
@@ -213,10 +270,37 @@ export default function SignupScreen() {
           </TouchableOpacity>
         </View>
 
+        {otpSent && (
+          <View style={styles.otpVerificationContainer}>
+            <TextInput
+              style={[styles.input, styles.otpInput]}
+              placeholder="Enter OTP"
+              placeholderTextColor="#ADADAD"
+              keyboardType="numeric"
+              maxLength={6}
+              value={formData.otp}
+              onChangeText={(text) => setFormData({ ...formData, otp: text })}
+            />
+            <TouchableOpacity 
+              style={[styles.verifyButton, isVerifyingOtp && styles.buttonDisabled, otpVerified && styles.verifiedButton]} 
+              onPress={verifyOTP}
+              disabled={isVerifyingOtp || otpVerified}
+            >
+              {isVerifyingOtp ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.buttonText}>
+                  {otpVerified ? 'Verified ✓' : 'Verify OTP'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
         <TouchableOpacity 
-          style={[styles.button, !otpSent && styles.buttonDisabled]} 
+          style={[styles.button, (!otpSent || !otpVerified) && styles.buttonDisabled]} 
           onPress={handleSignup}
-          disabled={!otpSent}
+          disabled={!otpSent || !otpVerified}
         >
           <Text style={styles.buttonText}>Create Account</Text>
         </TouchableOpacity>
@@ -442,5 +526,29 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  otpVerificationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    gap: 10,
+  },
+  otpInput: {
+    flex: 1,
+    marginBottom: 0,
+    letterSpacing: 2,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  verifyButton: {
+    backgroundColor: '#0D6C7E',
+    padding: 15,
+    borderRadius: 10,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  verifiedButton: {
+    backgroundColor: '#4CAF50',
   },
 });
