@@ -1,78 +1,100 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Alert, Modal, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '@/app/firebase/config'; // Make sure you have this firebase config file
-import { SendDirectSms } from 'react-native-send-direct-sms';
-import { MaterialIcons } from '@expo/vector-icons';
-import axios from 'axios'; // Add this import
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Image,
+  Alert,
+  Modal,
+  ActivityIndicator,
+} from "react-native";
+import { useRouter } from "expo-router";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
+import { auth, db } from "@/app/firebase/config"; // Make sure you have this firebase config file
+import { SendDirectSms } from "react-native-send-direct-sms";
+import { MaterialIcons } from "@expo/vector-icons";
+import axios from "axios"; // Add this import
 
-const sendSmsData = (mobileNumber: string, bodySMS: string, onSuccess: (otp: string) => void) => {
-  console.log('Attempting to send SMS to:', mobileNumber);
-  console.log('SMS content:', bodySMS);
-  
+const sendSmsData = (
+  mobileNumber: string,
+  bodySMS: string,
+  onSuccess: (otp: string) => void
+) => {
+  console.log("Attempting to send SMS to:", mobileNumber);
+  console.log("SMS content:", bodySMS);
+
   // Extract OTP from the message
   const otpMatch = bodySMS.match(/\d{6}/);
-  const otp = otpMatch ? otpMatch[0] : '';
-  
+  const otp = otpMatch ? otpMatch[0] : "";
+
   SendDirectSms(mobileNumber, bodySMS)
     .then((res) => {
-      console.log('SMS sent successfully:', res);
+      console.log("SMS sent successfully:", res);
       // Call the success callback with the OTP
       onSuccess(otp);
     })
     .catch((err) => {
-      console.error('SMS sending failed:', err);
+      console.error("SMS sending failed:", err);
     });
 };
 
 export default function SignupScreen() {
   const router = useRouter();
   const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    mobileNumber: '',
-    otp: '', // Add OTP field
+    fullName: "",
+    email: "",
+    adhaarNumber: "",
+    password: "",
+    confirmPassword: "",
+    mobileNumber: "",
+    otp: "", // Add OTP field
   });
   const [otpSent, setOtpSent] = useState(false);
   const [isLoadingOtp, setIsLoadingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [showOtpPopup, setShowOtpPopup] = useState(false);
-  const [currentOtp, setCurrentOtp] = useState('');
+  const [currentOtp, setCurrentOtp] = useState("");
   const [otpVerified, setOtpVerified] = useState(false);
 
   // Replace the generateOTP function with an API call
   const generateOTP = async (phoneNumber: string) => {
     try {
       // Replace localhost with your computer's IP address
-      const response = await axios.post('http://192.168.74.71:3000/api/send-otp/', {
-        phone: `+91${phoneNumber}`
-      });
-      
+      const response = await axios.post(
+        "http://192.168.1.7:5000/api/send-otp/",
+        {
+          phone: `+91${phoneNumber}`,
+        }
+      );
+
       // Also check the response structure based on your server code
       if (response.data && response.data.success) {
         // Your server returns otpId, not the actual OTP
         // You might need to handle this differently
-        return response.data.otpId || '123456'; // Fallback for testing
+        return response.data.otpId || "123456"; // Fallback for testing
       } else {
-        throw new Error('Failed to get OTP from server');
+        throw new Error("Failed to get OTP from server");
       }
     } catch (error) {
-      console.error('Error fetching OTP from API:', error);
+      console.error("Error fetching OTP from API:", error);
       throw error;
     }
   };
 
   const handleSendOTP = async () => {
-    console.log('Starting OTP send process...');
-    console.log('Mobile number:', formData.mobileNumber);
+    console.log("Starting OTP send process...");
+    console.log("Mobile number:", formData.mobileNumber);
 
     if (!formData.mobileNumber || formData.mobileNumber.length !== 10) {
-      console.log('Invalid mobile number length:', formData.mobileNumber.length);
-      Alert.alert('Error', 'Please enter a valid 10-digit mobile number');
+      console.log(
+        "Invalid mobile number length:",
+        formData.mobileNumber.length
+      );
+      Alert.alert("Error", "Please enter a valid 10-digit mobile number");
       return;
     }
 
@@ -80,64 +102,63 @@ export default function SignupScreen() {
     try {
       // Get OTP from API instead of generating locally
       const otp = await generateOTP(formData.mobileNumber);
-      console.log('Received OTP from API:', otp);
-      
+      console.log("Received OTP from API:", otp);
+
       const otpMessage = `Your MediConnect OTP is: ${otp}. Valid for 10 minutes.`;
-      console.log('OTP message:', otpMessage);
-      
-      // Store OTP in Firestore
-      console.log('Storing OTP in Firestore...');
-      await setDoc(doc(db, 'otpVerifications', formData.mobileNumber), {
-        otp,
-        expiry: new Date(Date.now() + 10 * 60000), // 10 minutes from now
-        attempts: 0,
-        verified: false,
-        createdAt: new Date(),
-      });
-      console.log('OTP stored in Firestore successfully');
+      console.log("OTP message:", otpMessage);
 
       // Send OTP via SMS and show popup when successful
-      console.log('Initiating SMS send...');
+      console.log("Initiating SMS send...");
       sendSmsData(formData.mobileNumber, otpMessage, (receivedOtp) => {
         setCurrentOtp(receivedOtp || otp);
         setShowOtpPopup(true);
       });
-      
+
       setOtpSent(true);
-      console.log('OTP process completed successfully');
-      Alert.alert('Success', 'OTP has been sent to your mobile number');
+      console.log("OTP process completed successfully");
+      Alert.alert("Success", "OTP has been sent to your mobile number");
     } catch (error: any) {
-      console.error('OTP process failed:', error);
-      Alert.alert('Error', 'Failed to send OTP. Please try again.');
+      console.error("OTP process failed:", error);
+      Alert.alert("Error", "Failed to send OTP. Please try again.");
     } finally {
       setIsLoadingOtp(false);
-      console.log('OTP process finished');
+      console.log("OTP process finished");
     }
   };
 
-  // Add OTP verification function
+  // Update the verifyOTP function
   const verifyOTP = async () => {
     if (!formData.otp || formData.otp.length !== 6) {
-      Alert.alert('Error', 'Please enter a valid 6-digit OTP');
+      Alert.alert("Error", "Please enter a valid 6-digit OTP");
       return;
     }
 
     setIsVerifyingOtp(true);
     try {
-      const response = await axios.post('http://192.168.74.71:3000/api/verify-otp/', {
-        phone: `+91${formData.mobileNumber}`,
-        otp: formData.otp
-      });
+      // Update the URL to match your working backend
+      const response = await axios.post(
+        "http://192.168.1.7:5000/api/verify-otp",
+        {
+          phone: `+91${formData.mobileNumber}`,
+          otp: formData.otp,
+        }
+      );
 
       if (response.data && response.data.success) {
         setOtpVerified(true);
-        Alert.alert('Success', 'OTP verified successfully');
+        Alert.alert(
+          "Success",
+          response.data.message || "OTP verified successfully"
+        );
       } else {
-        Alert.alert('Error', 'Invalid OTP. Please try again.');
+        Alert.alert("Error", "Invalid OTP. Please try again.");
       }
     } catch (error: any) {
-      console.error('OTP verification failed:', error);
-      Alert.alert('Error', error.response?.data?.error || 'Failed to verify OTP. Please try again.');
+      console.error("OTP verification failed:", error);
+      Alert.alert(
+        "Error",
+        error.response?.data?.error || "Failed to verify OTP. Please try again."
+      );
     } finally {
       setIsVerifyingOtp(false);
     }
@@ -145,42 +166,47 @@ export default function SignupScreen() {
 
   const handleSignup = async () => {
     if (!otpSent) {
-      Alert.alert('Error', 'Please verify your mobile number first');
+      Alert.alert("Error", "Please verify your mobile number first");
       return;
     }
 
     if (!otpVerified) {
-      Alert.alert('Error', 'Please verify the OTP before creating account');
+      Alert.alert("Error", "Please verify the OTP before creating account");
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      Alert.alert("Error", "Passwords do not match");
       return;
     }
 
     try {
       // Create the user account
-      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-      
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        formData.email,
+        formData.password
+      );
+
       // Create user document in Firestore
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
+      await setDoc(doc(db, "users", userCredential.user.uid), {
         fullName: formData.fullName,
         email: formData.email,
+        adhaarNumber: formData.adhaarNumber,
         mobileNumber: formData.mobileNumber,
         createdAt: new Date(),
       });
 
       // Navigate to OTP verification page with mobile number
       router.push({
-        pathname: '/auth/login',
-        params: { 
+        pathname: "/auth/login",
+        params: {
           mobileNumber: formData.mobileNumber,
-          userId: userCredential.user.uid
-        }
+          userId: userCredential.user.uid,
+        },
       });
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      Alert.alert("Error", error.message);
     }
   };
 
@@ -188,8 +214,8 @@ export default function SignupScreen() {
     <ScrollView style={styles.container}>
       <View style={styles.logoContainer}>
         <View style={styles.logoWrapper}>
-          <Image 
-            source={require('../../assets/images/MediConLogo.png')}
+          <Image
+            source={require("../../assets/images/MediConLogo.png")}
             style={styles.logo}
             resizeMode="contain"
           />
@@ -198,12 +224,8 @@ export default function SignupScreen() {
       </View>
 
       <View style={styles.headerContainer}>
-        <Text style={styles.headerText}>
-          Create Account
-        </Text>
-        <Text style={styles.subHeaderText}>
-          Enter your details
-        </Text>
+        <Text style={styles.headerText}>Create Account</Text>
+        <Text style={styles.subHeaderText}>Enter your details</Text>
       </View>
 
       <View style={styles.formContainer}>
@@ -230,8 +252,10 @@ export default function SignupScreen() {
           keyboardType="numeric"
           autoCapitalize="none"
           maxLength={12}
-          // value={formData.adhaarNumber}
-          // onChangeText={(text) => setFormData({ ...formData, adhaarNumber: text })}
+          value={formData.adhaarNumber}
+          onChangeText={(text) =>
+            setFormData({ ...formData, adhaarNumber: text })
+          }
         />
         <TextInput
           style={styles.input}
@@ -247,7 +271,9 @@ export default function SignupScreen() {
           placeholderTextColor="#ADADAD"
           secureTextEntry
           value={formData.confirmPassword}
-          onChangeText={(text) => setFormData({ ...formData, confirmPassword: text })}
+          onChangeText={(text) =>
+            setFormData({ ...formData, confirmPassword: text })
+          }
         />
         <View style={styles.phoneContainer}>
           <TextInput
@@ -257,15 +283,21 @@ export default function SignupScreen() {
             keyboardType="numeric"
             maxLength={10}
             value={formData.mobileNumber}
-            onChangeText={(text) => setFormData({ ...formData, mobileNumber: text })}
+            onChangeText={(text) =>
+              setFormData({ ...formData, mobileNumber: text })
+            }
           />
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.otpButton, isLoadingOtp && styles.otpButtonDisabled]}
             onPress={handleSendOTP}
             disabled={isLoadingOtp}
           >
             <Text style={styles.otpButtonText}>
-              {isLoadingOtp ? 'Sending...' : otpSent ? 'Resend OTP' : 'Send OTP'}
+              {isLoadingOtp
+                ? "Sending..."
+                : otpSent
+                ? "Resend OTP"
+                : "Send OTP"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -281,8 +313,12 @@ export default function SignupScreen() {
               value={formData.otp}
               onChangeText={(text) => setFormData({ ...formData, otp: text })}
             />
-            <TouchableOpacity 
-              style={[styles.verifyButton, isVerifyingOtp && styles.buttonDisabled, otpVerified && styles.verifiedButton]} 
+            <TouchableOpacity
+              style={[
+                styles.verifyButton,
+                isVerifyingOtp && styles.buttonDisabled,
+                otpVerified && styles.verifiedButton,
+              ]}
               onPress={verifyOTP}
               disabled={isVerifyingOtp || otpVerified}
             >
@@ -290,15 +326,18 @@ export default function SignupScreen() {
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <Text style={styles.buttonText}>
-                  {otpVerified ? 'Verified ✓' : 'Verify OTP'}
+                  {otpVerified ? "Verified ✓" : "Verify OTP"}
                 </Text>
               )}
             </TouchableOpacity>
           </View>
         )}
 
-        <TouchableOpacity 
-          style={[styles.button, (!otpSent || !otpVerified) && styles.buttonDisabled]} 
+        <TouchableOpacity
+          style={[
+            styles.button,
+            (!otpSent || !otpVerified) && styles.buttonDisabled,
+          ]}
           onPress={handleSignup}
           disabled={!otpSent || !otpVerified}
         >
@@ -308,7 +347,7 @@ export default function SignupScreen() {
 
       <View style={styles.loginContainer}>
         <Text style={styles.loginText}>Already have an account? </Text>
-        <TouchableOpacity onPress={() => router.push('/(tabs)/login')}>
+        <TouchableOpacity onPress={() => router.push("/(tabs)/login")}>
           <Text style={styles.loginLink}>Login</Text>
         </TouchableOpacity>
       </View>
@@ -322,21 +361,20 @@ export default function SignupScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.closeButton}
               onPress={() => setShowOtpPopup(false)}
             >
               <MaterialIcons name="close" size={24} color="#0D6C7E" />
             </TouchableOpacity>
-            
+
             <Text style={styles.modalTitle}>Your OTP</Text>
             <Text style={styles.otpText}>{currentOtp}</Text>
             <Text style={styles.otpDescription}>
-              Please use this OTP to verify your account.
-              Valid for 10 minutes.
+              Please use this OTP to verify your account. Valid for 10 minutes.
             </Text>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={styles.copyButton}
               onPress={() => {
                 setShowOtpPopup(false);
@@ -354,10 +392,10 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4F4F4',
+    backgroundColor: "#F4F4F4",
   },
   logoContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 40,
     marginBottom: 20,
   },
@@ -366,21 +404,21 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     borderWidth: 3,
-    borderColor: '#0D6C7E',
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderColor: "#0D6C7E",
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 16,
     padding: 15,
   },
   logo: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   appName: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#0D6C7E',
+    fontWeight: "bold",
+    color: "#0D6C7E",
     letterSpacing: 1,
   },
   headerContainer: {
@@ -390,59 +428,59 @@ const styles = StyleSheet.create({
   },
   headerText: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: '#0D6C7E',
+    fontWeight: "bold",
+    color: "#0D6C7E",
     marginBottom: 8,
   },
   subHeaderText: {
     fontSize: 16,
-    color: '#ADADAD',
+    color: "#ADADAD",
   },
   formContainer: {
-    width: '100%',
+    width: "100%",
     paddingHorizontal: 20,
   },
   input: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     padding: 15,
     marginBottom: 15,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: "#E0E0E0",
     fontSize: 16,
-    color: '#04282E',
+    color: "#04282E",
   },
   button: {
-    backgroundColor: '#F4A261',
+    backgroundColor: "#F4A261",
     padding: 15,
     borderRadius: 10,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 20,
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   loginContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
     marginTop: 10,
     marginBottom: 30,
   },
   loginText: {
-    color: '#ADADAD',
+    color: "#ADADAD",
     fontSize: 14,
   },
   loginLink: {
-    color: '#E76F51',
+    color: "#E76F51",
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   phoneContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 15,
     gap: 10,
   },
@@ -451,85 +489,85 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   otpButton: {
-    backgroundColor: '#0D6C7E',
+    backgroundColor: "#0D6C7E",
     padding: 15,
     borderRadius: 10,
     minWidth: 100,
-    alignItems: 'center',
+    alignItems: "center",
   },
   otpButtonDisabled: {
-    backgroundColor: '#ADADAD',
+    backgroundColor: "#ADADAD",
   },
   otpButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   buttonDisabled: {
-    backgroundColor: '#ADADAD',
+    backgroundColor: "#ADADAD",
   },
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 15,
     padding: 25,
-    width: '90%',
-    alignItems: 'center',
-    position: 'relative',
-    shadowColor: '#000',
+    width: "90%",
+    alignItems: "center",
+    position: "relative",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
   },
   closeButton: {
-    position: 'absolute',
+    position: "absolute",
     top: 15,
     right: 15,
     zIndex: 1,
   },
   modalTitle: {
     fontSize: 22,
-    fontWeight: 'bold',
-    color: '#0D6C7E',
+    fontWeight: "bold",
+    color: "#0D6C7E",
     marginBottom: 20,
     marginTop: 10,
   },
   otpText: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: '#F4A261',
+    fontWeight: "bold",
+    color: "#F4A261",
     letterSpacing: 5,
     marginBottom: 20,
   },
   otpDescription: {
     fontSize: 14,
-    color: '#ADADAD',
-    textAlign: 'center',
+    color: "#ADADAD",
+    textAlign: "center",
     marginBottom: 20,
   },
   copyButton: {
-    backgroundColor: '#0D6C7E',
+    backgroundColor: "#0D6C7E",
     paddingVertical: 12,
     paddingHorizontal: 30,
     borderRadius: 10,
     marginTop: 10,
   },
   copyButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   otpVerificationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 15,
     gap: 10,
   },
@@ -537,18 +575,18 @@ const styles = StyleSheet.create({
     flex: 1,
     marginBottom: 0,
     letterSpacing: 2,
-    textAlign: 'center',
-    fontWeight: '600',
+    textAlign: "center",
+    fontWeight: "600",
   },
   verifyButton: {
-    backgroundColor: '#0D6C7E',
+    backgroundColor: "#0D6C7E",
     padding: 15,
     borderRadius: 10,
     minWidth: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   verifiedButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: "#4CAF50",
   },
 });
