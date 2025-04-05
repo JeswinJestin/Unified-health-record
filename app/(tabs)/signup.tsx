@@ -65,7 +65,7 @@ export default function SignupScreen() {
     try {
       // Replace localhost with your computer's IP address
       const response = await axios.post(
-        "http://192.168.1.7:5000/api/send-otp/",
+        "https://crucial-heloise-mainproject-a3e136c7.koyeb.app/api/send-otp/",
         {
           phone: `+91${phoneNumber}`,
         }
@@ -137,7 +137,7 @@ export default function SignupScreen() {
     try {
       // Update the URL to match your working backend
       const response = await axios.post(
-        "http://192.168.1.7:5000/api/verify-otp",
+        "https://crucial-heloise-mainproject-a3e136c7.koyeb.app/api/verify-otp",
         {
           phone: `+91${formData.mobileNumber}`,
           otp: formData.otp,
