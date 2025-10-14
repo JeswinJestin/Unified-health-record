@@ -168,7 +168,7 @@ Unified-Health-Monitoring-System/
 * **Juju M Philip** – Developer (Next JS frontend Web App)
 * **Darsana Shabu** – Developer (Next JS frontend Web App)
 
-* * **Jovit Mathew** – Developer, Testing, API Fetch, Backend Integration
+* **Jovit Mathew** – Developer, Testing, API Fetch, Backend Integration
 * **Goutham Sreeram** – Developer, Testing, API Fetch, Backend Integration
 * **Haleem Muhsin** – Frontend UI,Version Conrol
 
@@ -197,8 +197,3 @@ Every bit of support helps in pushing healthcare tech forward.
 
 ```
 
----
-
-Would you like me to tailor the **top intro and tone** a bit more towards a *portfolio-style personal README* (slightly more casual and storytelling, like how you’d explain it in an interview)?  
-That version would feel more “you” — a mix of professional + friendly tone.
-```
