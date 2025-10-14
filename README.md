@@ -10,7 +10,6 @@ The idea was simple: make healthcare data easy to access for users, doctors, and
 <img width="5760" height="3240" alt="Image" src="https://github.com/user-attachments/assets/fa8ab8cf-69b6-4fbd-90e8-7abf5b7cb670" />
 
 ---
----
 
 ## 🚀 Overview
 
