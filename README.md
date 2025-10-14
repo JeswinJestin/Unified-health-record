@@ -5,6 +5,10 @@ The idea was simple: make healthcare data easy to access for users, doctors, and
 
 ---
 
+
+---
+---
+
 ## 🚀 Overview
 
 **MediConnect** is a unified digital health record platform that connects users, hospitals, and healthcare professionals through a single interface.  
