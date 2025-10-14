@@ -1,4 +1,3 @@
-```markdown
 # 🩺 MediConnect – Unified Health Monitoring System
 
 A cross-platform health-tech project built to **bring all your medical records under one roof** — securely, intelligently, and accessibly.  
