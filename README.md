@@ -5,12 +5,6 @@ The idea was simple: make healthcare data easy to access for users, doctors, and
 
 ---
 
-<img width="5760" height="3240" alt="Image" src="https://github.com/user-attachments/assets/a164bc3e-0592-4252-85dd-0ad784aaffe6" />
-<img width="5760" height="3240" alt="Image" src="https://github.com/user-attachments/assets/a631f1ae-759f-42b6-8f7c-cda6d862d85b" />
-<img width="5760" height="3240" alt="Image" src="https://github.com/user-attachments/assets/fa8ab8cf-69b6-4fbd-90e8-7abf5b7cb670" />
-
----
-
 ## 🚀 Overview
 
 **MediConnect** is a unified digital health record platform that connects users, hospitals, and healthcare professionals through a single interface.  
@@ -194,6 +188,13 @@ Unified-Health-Monitoring-System/
 
 This project is more than just a health app — it’s a **step toward connected, transparent, and AI-empowered healthcare in India**.
 From design to deployment, everything was built with the mindset of **bridging the gap between patients and hospitals** in the simplest, most human-friendly way possible.
+
+---
+## UI/UX Designs
+
+<img width="5760" height="3240" alt="Image" src="https://github.com/user-attachments/assets/a164bc3e-0592-4252-85dd-0ad784aaffe6" />
+<img width="5760" height="3240" alt="Image" src="https://github.com/user-attachments/assets/a631f1ae-759f-42b6-8f7c-cda6d862d85b" />
+<img width="5760" height="3240" alt="Image" src="https://github.com/user-attachments/assets/fa8ab8cf-69b6-4fbd-90e8-7abf5b7cb670" />
 
 ---
 
