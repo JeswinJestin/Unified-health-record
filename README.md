@@ -164,6 +164,14 @@ Unified-Health-Monitoring-System/
 
 * **Jeswin Thomas Jestin** – Developer, Designer & Project Lead
   (Concept, UI/UX, React Native frontend, AI integration, Firebase backend)
+* **Julie M Reji** – Developer (Concept, UI/UX, React Native frontend)
+* **Juju M Philip** – Developer (Next JS frontend Web App)
+* **Darsana Shabu** – Developer (Next JS frontend Web App)
+
+* * **Jovit Mathew** – Developer, Testing, API Fetch, Backend Integration
+* **Goutham Sreeram** – Developer, Testing, API Fetch, Backend Integration
+* **Haleem Muhsin** – Frontend UI,Version Conrol
+
 
 ---
 
